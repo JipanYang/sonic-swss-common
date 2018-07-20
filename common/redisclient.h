@@ -45,9 +45,8 @@ class RedisClient
 
         void mset(const std::unordered_map<std::string, std::string> &map);
 
-        void hmset(const std::string &key, const std::unordered_map<std::string, std::string> &map);
-        void hmset(const std::string &key, const std::vector<FieldValueTuple> &values);
-        void hmset(const std::string &key, const std::map<std::string, std::string> &vmap);
+        template<typename InputIterator>
+        void hmset(const std::string &key, InputIterator start, InputIterator stop);
 
         std::shared_ptr<std::string> get(const std::string &key);
 
@@ -69,7 +68,7 @@ class RedisClient
         swss::DBConnector *m_db;
 };
 
-template <typename OutputIterator>
+template<typename OutputIterator>
 void RedisClient::hgetall(const std::string &key, OutputIterator result)
 {
     RedisCommand sincr;
@@ -83,6 +82,14 @@ void RedisClient::hgetall(const std::string &key, OutputIterator result)
         *result = std::make_pair(ctx->element[i]->str, ctx->element[i+1]->str);
         ++result;
     }
+}
+
+template<typename InputIterator>
+void RedisClient::hmset(const std::string &key, InputIterator start, InputIterator stop)
+{
+    RedisCommand shmset;
+    shmset.formatHMSET(key, start, stop);
+    RedisReply r(m_db, shmset, REDIS_REPLY_STATUS);
 }
 
 }

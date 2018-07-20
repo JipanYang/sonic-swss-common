@@ -48,20 +48,6 @@ void RedisClient::hset(const string &key, const string &field, const string &val
     RedisReply r(m_db, shset, REDIS_REPLY_INTEGER);
 }
 
-void RedisClient::hmset(const string &key, const vector<FieldValueTuple> &values)
-{
-    RedisCommand shmset;
-    shmset.formatHMSET(key, values.begin(), values.end());
-    RedisReply r(m_db, shmset, REDIS_REPLY_STATUS);
-}
-
-void RedisClient::hmset(const string &key, const std::map<std::string, std::string> &vmap)
-{
-    RedisCommand shmset;
-    shmset.formatHMSET(key, vmap.begin(), vmap.end());
-    RedisReply r(m_db, shmset, REDIS_REPLY_STATUS);
-}
-
 void RedisClient::set(const string &key, const string &value)
 {
     RedisCommand sset;
