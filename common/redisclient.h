@@ -78,7 +78,6 @@ void RedisClient::hgetall(const std::string &key, OutputIterator result)
 
     auto ctx = r.getContext();
 
-    std::map<std::string, std::string> map;
     for (unsigned int i = 0; i < ctx->elements; i += 2)
     {
         *result = std::make_pair(ctx->element[i]->str, ctx->element[i+1]->str);
