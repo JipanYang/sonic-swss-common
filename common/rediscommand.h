@@ -24,7 +24,9 @@ public:
     void formatArgv(int argc, const char **argv, const size_t *argvlen);
 
     /* Format HMSET key multiple field value command */
+#ifndef SWIG
     __attribute__((deprecated))
+#endif
     void formatHMSET(const std::string &key,
                      const std::vector<FieldValueTuple> &values);
 
