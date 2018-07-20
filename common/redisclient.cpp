@@ -20,12 +20,17 @@ int64_t RedisClient::del(const string &key)
     return r.getContext()->integer;
 }
 
-int64_t RedisClient::exists(const string &key)
+bool RedisClient::exists(const string &key)
 {
-    RedisCommand sexists;
-    sexists.format("EXISTS %s", key.c_str());
-    RedisReply r(m_db, sexists, REDIS_REPLY_INTEGER);
-    return r.getContext()->integer;
+    RedisCommand rexists;
+    if (key.find_first_of(" \t") != string::npos)
+    {
+        SWSS_LOG_ERROR("EXISTS failed, invalid space or tab in single key: %s", key.c_str());
+        throw runtime_error("EXISTS failed, invalid space or tab in single key");
+    }
+    rexists.format("EXISTS %s", key.c_str());
+    RedisReply r(m_db, rexists, REDIS_REPLY_INTEGER);
+    return (r.getContext()->integer > 0);
 }
 
 int64_t RedisClient::hdel(const string &key, const string &field)
@@ -43,34 +48,6 @@ void RedisClient::hset(const string &key, const string &field, const string &val
     RedisReply r(m_db, shset, REDIS_REPLY_INTEGER);
 }
 
-void RedisClient::hmset(const string &key, const vector<FieldValueTuple> &values)
-{
-    if (values.size() == 0)
-        return;
-
-    RedisCommand shmset;
-    shmset.formatHMSET(key, values);
-    RedisReply r(m_db, shmset, REDIS_REPLY_STATUS);
-}
-
-void RedisClient::hmset(const string &key, const std::map<std::string, std::string> &vmap)
-{
-    if (vmap.size() == 0)
-        return;
-
-    vector<FieldValueTuple> values;
-    auto it = vmap.begin();
-    while (it != vmap.end())
-    {
-        values.push_back(FieldValueTuple(it->first, it->second));
-        it++;
-    }
-
-    RedisCommand shmset;
-    shmset.formatHMSET(key, values);
-    RedisReply r(m_db, shmset, REDIS_REPLY_STATUS);
-}
-
 void RedisClient::set(const string &key, const string &value)
 {
     RedisCommand sset;
@@ -80,31 +57,8 @@ void RedisClient::set(const string &key, const string &value)
 
 unordered_map<string, string> RedisClient::hgetall(const string &key)
 {
-    RedisCommand sincr;
-    sincr.format("HGETALL %s", key.c_str());
-    RedisReply r(m_db, sincr, REDIS_REPLY_ARRAY);
-
-    auto ctx = r.getContext();
-
     unordered_map<string, string> map;
-    for (unsigned int i = 0; i < ctx->elements; i += 2)
-        map[string(ctx->element[i]->str)] = string(ctx->element[i+1]->str);
-
-    return map;
-}
-
-std::map<std::string, std::string> RedisClient::hgetallordered(const std::string &key)
-{
-    RedisCommand sincr;
-    sincr.format("HGETALL %s", key.c_str());
-    RedisReply r(m_db, sincr, REDIS_REPLY_ARRAY);
-
-    auto ctx = r.getContext();
-
-    map<string, string> map;
-    for (unsigned int i = 0; i < ctx->elements; i += 2)
-        map[string(ctx->element[i]->str)] = string(ctx->element[i+1]->str);
-
+    hgetall(key, std::inserter(map, map.end()));
     return map;
 }
 
