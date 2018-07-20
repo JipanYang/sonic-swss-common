@@ -76,23 +76,6 @@ unordered_map<string, string> RedisClient::hgetall(const string &key)
     return map;
 }
 
-template <typename OutputIterator>
-void RedisClient::hgetall(const std::string &key, OutputIterator result)
-{
-    RedisCommand sincr;
-    sincr.format("HGETALL %s", key.c_str());
-    RedisReply r(m_db, sincr, REDIS_REPLY_ARRAY);
-
-    auto ctx = r.getContext();
-
-    map<string, string> map;
-    for (unsigned int i = 0; i < ctx->elements; i += 2)
-    {
-        *result = std::make_pair(ctx->element[i]->str, ctx->element[i+1]->str);
-        ++result;
-    }
-}
-
 vector<string> RedisClient::keys(const string &key)
 {
     RedisCommand skeys;

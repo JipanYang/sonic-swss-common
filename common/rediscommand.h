@@ -32,22 +32,7 @@ public:
 
     template<typename InputIterator>
     void formatHMSET(const std::string &key,
-                     InputIterator start, InputIterator stop)
-    {
-        if (start == stop) throw std::invalid_argument("empty values");
-
-        const char* cmd = "HMSET";
-
-        std::vector<const char*> args = { cmd, key.c_str() };
-
-        for (auto i = start; i != stop; i++)
-        {
-            args.push_back(fvField(*i).c_str());
-            args.push_back(fvValue(*i).c_str());
-        }
-
-        formatArgv((int)args.size(), args.data(), NULL);
-    }
+                     InputIterator start, InputIterator stop);
 
     /* Format HSET key field value command */
     void formatHSET(const std::string& key, const std::string& field,
@@ -66,5 +51,24 @@ public:
 private:
     char *temp;
 };
+
+template<typename InputIterator>
+void RedisCommand::formatHMSET(const std::string &key,
+                 InputIterator start, InputIterator stop)
+{
+    if (start == stop) throw std::invalid_argument("empty values");
+
+    const char* cmd = "HMSET";
+
+    std::vector<const char*> args = { cmd, key.c_str() };
+
+    for (auto i = start; i != stop; i++)
+    {
+        args.push_back(fvField(*i).c_str());
+        args.push_back(fvValue(*i).c_str());
+    }
+
+    formatArgv((int)args.size(), args.data(), NULL);
+}
 
 }
