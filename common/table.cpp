@@ -29,7 +29,7 @@ const TableNameSeparatorMap TableBase::tableNameSeparatorMap = {
    { STATE_DB,        TABLE_NAME_SEPARATOR_VBAR  }
 };
 
-Table::Table(DBConnector *db, const string &tableName)
+Table::Table(const DBConnector *db, const string &tableName)
     : Table(new RedisPipeline(db, 1), tableName, false)
 {
     m_pipeowned = true;
@@ -107,7 +107,7 @@ bool Table::getEntry(const string &key, const std::string &field,  std::string &
     return true;
 }
 
-void Table::setEntry(const string &key, const std::string& field, const std::string& value,
+void Table::setEntry(const string &key, const std::string &field, const std::string &value,
                 const string& /*op*/, const string& /*prefix*/)
 {
     if (field.empty() || value.empty())

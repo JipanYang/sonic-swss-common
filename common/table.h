@@ -130,7 +130,7 @@ public:
 
 class Table : public TableBase, public TableEntryEnumerable {
 public:
-    Table(DBConnector *db, const std::string &tableName);
+    Table(const DBConnector *db, const std::string &tableName);
     Table(RedisPipeline *pipeline, const std::string &tableName, bool buffered);
     ~Table() override;
 
@@ -150,8 +150,8 @@ public:
 
     virtual bool getEntry(const std::string &key, const std::string &field,  std::string &value);
     virtual void setEntry(const std::string &key,
-                          const std::string& field,
-                          const std::string& value,
+                          const std::string &field,
+                          const std::string &value,
                           const std::string &op = "",
                           const std::string &prefix = EMPTY_PREFIX);
 
