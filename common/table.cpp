@@ -29,7 +29,7 @@ const TableNameSeparatorMap TableBase::tableNameSeparatorMap = {
    { STATE_DB,        TABLE_NAME_SEPARATOR_VBAR  }
 };
 
-Table::Table(DBConnector *db, const string &tableName)
+Table::Table(const DBConnector *db, const string &tableName)
     : Table(new RedisPipeline(db, 1), tableName, false)
 {
     m_pipeowned = true;
@@ -85,6 +85,41 @@ bool Table::get(const string &key, vector<FieldValueTuple> &values)
     return true;
 }
 
+bool Table::hget(const string &key, const std::string &field,  std::string &value)
+{
+    RedisCommand hget_entry;
+    hget_entry.format("HGET %s %s", getKeyName(key).c_str(), field.c_str());
+    RedisReply r = m_pipe->push(hget_entry);
+    redisReply *reply = r.getContext();
+
+    if (reply->type == REDIS_REPLY_NIL)
+    {
+        value.clear();
+        return false;
+    }
+
+    if (reply->type != REDIS_REPLY_STRING)
+        throw system_error(make_error_code(errc::io_error),
+                "Got unexpected reply type");
+
+    value = stripSpecialSym(reply->str);
+
+    return true;
+}
+
+void Table::hset(const string &key, const std::string &field, const std::string &value,
+                const string& /*op*/, const string& /*prefix*/)
+{
+    RedisCommand cmd;
+    cmd.formatHSET(getKeyName(key), field, value);
+
+    m_pipe->push(cmd, REDIS_REPLY_INTEGER);
+    if (!m_buffered)
+    {
+        m_pipe->flush();
+    }
+}
+
 void Table::set(const string &key, const vector<FieldValueTuple> &values,
                 const string& /*op*/, const string& /*prefix*/)
 {
@@ -92,7 +127,7 @@ void Table::set(const string &key, const vector<FieldValueTuple> &values,
         return;
 
     RedisCommand cmd;
-    cmd.formatHMSET(getKeyName(key), values);
+    cmd.formatHMSET(getKeyName(key), values.begin(), values.end());
 
     m_pipe->push(cmd, REDIS_REPLY_STATUS);
     if (!m_buffered)

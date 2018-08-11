@@ -35,7 +35,7 @@ typedef std::map<std::string,TableMap> TableDump;
 class TableBase {
 public:
     TableBase(int dbId, const std::string &tableName)
-        : m_tableName(tableName)
+        : m_tableName(tableName), m_dbId(dbId)
     {
         /* Look up table separator for the provided DB */
         auto it = tableNameSeparatorMap.find(dbId);
@@ -52,6 +52,7 @@ public:
     }
 
     std::string getTableName() const { return m_tableName; }
+    int getDbId() const { return m_dbId; }
 
     /* Return the actual key name as a combination of tableName<table_separator>key */
     std::string getKeyName(const std::string &key)
@@ -74,6 +75,7 @@ private:
 
     std::string m_tableName;
     std::string m_tableSeparator;
+    int m_dbId;
 };
 
 class TableEntryWritable {
@@ -128,7 +130,7 @@ public:
 
 class Table : public TableBase, public TableEntryEnumerable {
 public:
-    Table(DBConnector *db, const std::string &tableName);
+    Table(const DBConnector *db, const std::string &tableName);
     Table(RedisPipeline *pipeline, const std::string &tableName, bool buffered);
     ~Table() override;
 
@@ -145,6 +147,13 @@ public:
     /* Read a value from the DB directly */
     /* Returns false if the key doesn't exists */
     virtual bool get(const std::string &key, std::vector<FieldValueTuple> &ovalues);
+
+    virtual bool hget(const std::string &key, const std::string &field,  std::string &value);
+    virtual void hset(const std::string &key,
+                          const std::string &field,
+                          const std::string &value,
+                          const std::string &op = "",
+                          const std::string &prefix = EMPTY_PREFIX);
 
     void getKeys(std::vector<std::string> &keys);
 
@@ -192,6 +201,7 @@ public:
     }
 
     std::string getKeySetName() const { return m_key; }
+    std::string getStateHashPrefix() const { return "_"; }
 };
 
 }
