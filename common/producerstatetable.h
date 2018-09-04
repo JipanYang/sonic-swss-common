@@ -26,16 +26,16 @@ public:
 
     void flush();
 
-    int64_t pendingCount();
+    int64_t count();
 
-    void drop();
+    void clear();
 private:
     bool m_buffered;
     bool m_pipeowned;
     RedisPipeline *m_pipe;
     std::string m_shaSet;
     std::string m_shaDel;
-    std::string m_shaDrop;
+    std::string m_shaClear;
 };
 
 }

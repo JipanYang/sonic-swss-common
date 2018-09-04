@@ -40,10 +40,10 @@ ProducerStateTable::ProducerStateTable(RedisPipeline *pipeline, const string &ta
         "redis.call('PUBLISH', KEYS[1], ARGV[1])\n";
     m_shaDel = m_pipe->loadRedisScript(luaDel);
 
-    string luaDrop =
+    string luaClear =
         "redis.call('DEL', KEYS[1])\n"
         "redis.call('DEL', KEYS[2])\n";
-    m_shaDrop = m_pipe->loadRedisScript(luaDrop);
+    m_shaClear = m_pipe->loadRedisScript(luaClear);
 }
 
 ProducerStateTable::~ProducerStateTable()
@@ -127,7 +127,7 @@ void ProducerStateTable::flush()
     m_pipe->flush();
 }
 
-int64_t ProducerStateTable::pendingCount()
+int64_t ProducerStateTable::count()
 {
     RedisCommand cmd;
     cmd.format("SCARD %s", getKeySetName().c_str());
@@ -139,17 +139,15 @@ int64_t ProducerStateTable::pendingCount()
 
 // Warning: calling this function will cause all data in keyset and the temporary table to be abandoned.
 // ConsumerState may have got the notification from PUBLISH, but will see no data popped.
-void ProducerStateTable::drop()
+void ProducerStateTable::clear()
 {
     // Assembly redis command args into a string vector
     vector<string> args;
     args.emplace_back("EVALSHA");
-    args.emplace_back(m_shaDrop);
+    args.emplace_back(m_shaClear);
     args.emplace_back("2");
     args.emplace_back(getKeySetName());
     args.emplace_back(getStateHashPrefix() + getTableName());
-    args.emplace_back("G");
-    args.emplace_back("''");
 
     // Transform data structure
     vector<const char *> args1;
