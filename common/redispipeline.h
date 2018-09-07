@@ -25,7 +25,7 @@ public:
         delete m_db;
     }
 
-    redisReply *push(const RedisCommand& command, int expectedType)
+    redisReply *push(const RedisCommand& command, int expectedType, bool mayFlush = true)
     {
         switch (expectedType)
         {
@@ -36,7 +36,10 @@ public:
                 redisAppendFormattedCommand(m_db->getContext(), command.c_str(), command.length());
                 m_expectedTypes.push(expectedType);
                 m_remaining++;
-                mayflush();
+                if (mayFlush)
+                {
+                    mayflush();
+                }
                 return NULL;
             }
             default:
