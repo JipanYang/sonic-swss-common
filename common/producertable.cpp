@@ -41,20 +41,20 @@ ProducerTable::ProducerTable(RedisPipeline *pipeline, const string &tableName, b
 
     // TODO: combine all followings with luaEnque and prepare one LUA script
     string luaHset =
-        "for i = 0, #KEYS do\n"
-        "    redis.call('HSET', KEYS[1 + i], ARGV[1 + i * 2], ARGV[2 + i * 2])\n"
+        "for i = 1, #KEYS do\n"
+        "    redis.call('HSET', KEYS[i], ARGV[i*2 -1], ARGV[i * 2])\n"
         "end\n";
     m_shaHset = m_pipe->loadRedisScript(luaHset);
 
     string luaHdel =
-        "for i = 0, #KEYS do\n"
-        "    redis.call('HDEL', KEYS[1 + i], ARGV[1 + i])\n"
+        "for i = 1, #KEYS do\n"
+        "    redis.call('HDEL', KEYS[i], ARGV[i])\n"
         "end\n";
     m_shaHdel = m_pipe->loadRedisScript(luaHdel);
 
     string luaDel =
-        "for i = 0, #KEYS do\n"
-        "    redis.call('DEL', KEYS[1 + i])\n"
+        "for i = 1, #KEYS do\n"
+        "    redis.call('DEL', KEYS[i])\n"
         "end\n";
     m_shaDel = m_pipe->loadRedisScript(luaDel);
 }
@@ -199,7 +199,8 @@ void ProducerTable::transformAndPush(const vector<string> &args)
     // Invoke redis command
     RedisCommand cmd;
     cmd.formatArgv((int)args1.size(), &args1[0], NULL);
-    m_pipe->push(cmd, REDIS_REPLY_NIL, false);
+    //m_pipe->push(cmd, REDIS_REPLY_NIL, false);
+    m_pipe->push(cmd, REDIS_REPLY_NIL, true);
 }
 
 void ProducerTable::set(const string &key, const vector<FieldValueTuple> &values, const string &op, const string &prefix,
