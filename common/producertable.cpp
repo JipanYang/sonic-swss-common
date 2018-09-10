@@ -199,8 +199,7 @@ void ProducerTable::transformAndPush(const vector<string> &args)
     // Invoke redis command
     RedisCommand cmd;
     cmd.formatArgv((int)args1.size(), &args1[0], NULL);
-    //m_pipe->push(cmd, REDIS_REPLY_NIL, false);
-    m_pipe->push(cmd, REDIS_REPLY_NIL, true);
+    m_pipe->push(cmd, REDIS_REPLY_NIL, false);
 }
 
 void ProducerTable::set(const string &key, const vector<FieldValueTuple> &values, const string &op, const string &prefix,
