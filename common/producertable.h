@@ -50,13 +50,9 @@ private:
     bool m_pipeowned;
     RedisPipeline *m_pipe;
     std::string m_shaEnque;
-    std::string m_shaHset;
-    std::string m_shaHdel;
-    std::string m_shaDel;
 
     void enqueueDbChange(const std::string &key, const std::string &value, const std::string &op, const std::string &prefix,
                          const std::vector<KeyOpFieldsValuesTuple> &vkco);
-    void transformAndPush(const std::vector<std::string> &args);
 };
 
 }

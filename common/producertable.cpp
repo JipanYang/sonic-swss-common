@@ -32,31 +32,27 @@ ProducerTable::ProducerTable(RedisPipeline *pipeline, const string &tableName, b
      * ARGV[3] : op
      * KEYS[2] : tableName + "_CHANNEL"
      * ARGV[4] : "G"
+     * ARGV[5] : number of HSET
+     * ARGV[6] : number of HDEL
+     * ARGV[7] : number of DEL
      */
     string luaEnque =
-        "redis.call('LPUSH', KEYS[1], ARGV[1], ARGV[2], ARGV[3]);"
-        "redis.call('PUBLISH', KEYS[2], ARGV[4]);";
+        "redis.call('LPUSH', KEYS[1], ARGV[1], ARGV[2], ARGV[3])\n"
+        "redis.call('PUBLISH', KEYS[2], ARGV[4])\n"
+        "local hsetnum = tonumber(ARGV[5])\n"
+        "local hdelnum = tonumber(ARGV[6])\n"
+        "local delnum = tonumber(ARGV[7])\n"
+        "for i = 1, hsetnum do\n"
+        "    redis.call('HSET', ARGV[7+ i*3 -2], ARGV[7+ i*3 -1], ARGV[7+ i*3])\n"
+        "end\n"
+        "for i = 1, hdelnum do\n"
+        "    redis.call('HDEL', ARGV[7+ hsetnum*3 + i*2 -1], ARGV[7+ hsetnum*3 + i*2])\n"
+        "end\n"
+        "for i = 1, delnum do\n"
+        "    redis.call('DEL', ARGV[7+ hsetnum*3 + hdelnum*2 +i])\n"
+        "end\n";
 
     m_shaEnque = m_pipe->loadRedisScript(luaEnque);
-
-    // TODO: combine all followings with luaEnque and prepare one LUA script
-    string luaHset =
-        "for i = 1, #KEYS do\n"
-        "    redis.call('HSET', KEYS[i], ARGV[i*2 -1], ARGV[i * 2])\n"
-        "end\n";
-    m_shaHset = m_pipe->loadRedisScript(luaHset);
-
-    string luaHdel =
-        "for i = 1, #KEYS do\n"
-        "    redis.call('HDEL', KEYS[i], ARGV[i])\n"
-        "end\n";
-    m_shaHdel = m_pipe->loadRedisScript(luaHdel);
-
-    string luaDel =
-        "for i = 1, #KEYS do\n"
-        "    redis.call('DEL', KEYS[i])\n"
-        "end\n";
-    m_shaDel = m_pipe->loadRedisScript(luaDel);
 }
 
 ProducerTable::ProducerTable(DBConnector *db, const string &tableName, const string &dumpFile)
@@ -87,111 +83,72 @@ void ProducerTable::setBuffered(bool buffered)
 void ProducerTable::enqueueDbChange(const string &key, const string &value, const string &op, const string& /* prefix */,
                                     const std::vector<KeyOpFieldsValuesTuple> &vkco)
 {
-    RedisCommand command;
-
-    command.format(
-        "EVALSHA %s 2 %s %s %s %s %s %s",
-        m_shaEnque.c_str(),
-        getKeyValueOpQueueTableName().c_str(),
-        getChannelName().c_str(),
-        key.c_str(),
-        value.c_str(),
-        op.c_str(),
-        "G");
-
-    if (vkco.size() == 0)
+    vector<string> hsetKFV;
+    vector<string> hdelKF;
+    vector<string> DelK;
+    for (const auto& kco: vkco)
     {
-        m_pipe->push(command, REDIS_REPLY_NIL);
+        if (kfvOp(kco) == "HMSET" || kfvOp(kco) == "HSET")
+        {
+            for (const auto& iv: kfvFieldsValues(kco))
+            {
+                hsetKFV.emplace_back(kfvKey(kco));
+                hsetKFV.emplace_back(fvField(iv));
+                hsetKFV.emplace_back(fvValue(iv));
+            }
+        }
+        else if (kfvOp(kco) == "HDEL")
+        {
+            hdelKF.emplace_back(kfvKey(kco));
+            hdelKF.emplace_back(fvField(kfvFieldsValues(kco)[0]));
+        }
+        else if (kfvOp(kco) == "DEL")
+        {
+            DelK.emplace_back(kfvKey(kco));
+        }
+        else
+        {
+            SWSS_LOG_ERROR("Unsupported redis op type %s",
+                kfvOp(kco).c_str());
+            throw system_error(make_error_code(errc::invalid_argument),
+                "Unsupported redis op type");
+        }
     }
-    else
+
+    vector<string> args;
+    args.emplace_back("EVALSHA");
+    args.emplace_back(m_shaEnque);
+    // Two keys: tableName + "_KEY_VALUE_OP_QUEUE; and tableName + "_CHANNEL"
+    args.emplace_back("2");
+    args.emplace_back(getKeyValueOpQueueTableName());
+    args.emplace_back(getChannelName());
+
+    // Four regular argvs
+    args.emplace_back(key);
+    args.emplace_back(value);
+    args.emplace_back(op);
+    args.emplace_back("G");
+
+    // number of hset, hdel and del for argv[5], argv[6] and argv[7]
+    args.emplace_back(to_string(hsetKFV.size()/3));
+    args.emplace_back(to_string(hdelKF.size()/2));
+    args.emplace_back(to_string(DelK.size()));
+
+    for (const auto& i: hsetKFV)
     {
-        vector<string> hsetKeys, hsetFV;
-        vector<string> hdelKeys, hdelFields;
-        vector<string> delKeys;
-        for (const auto& kco: vkco)
-        {
-            if (kfvOp(kco) == "HMSET" || kfvOp(kco) == "HSET")
-            {
-                hsetKeys.insert(hsetKeys.end(), kfvFieldsValues(kco).size(), kfvKey(kco));
-
-                for (const auto& iv: kfvFieldsValues(kco))
-                {
-                    hsetFV.emplace_back(fvField(iv));
-                    hsetFV.emplace_back(fvValue(iv));
-                }
-            }
-            else if (kfvOp(kco) == "HDEL")
-            {
-                hdelKeys.emplace_back(kfvKey(kco));
-                hdelFields.emplace_back(fvField(kfvFieldsValues(kco)[0]));
-            }
-            else if (kfvOp(kco) == "DEL")
-            {
-                delKeys.emplace_back(kfvKey(kco));
-            }
-            else
-            {
-                SWSS_LOG_ERROR("Unsupported redis op type %s",
-                    kfvOp(kco).c_str());
-                throw system_error(make_error_code(errc::invalid_argument),
-                    "Unsupported redis op type");
-            }
-        }
-
-        if (hsetKeys.size() > 0)
-        {
-            vector<string> args;
-            args.emplace_back("EVALSHA");
-            args.emplace_back(m_shaHset);
-            args.emplace_back(to_string(hsetKeys.size()));
-            for (const auto& ik: hsetKeys)
-            {
-                args.emplace_back(ik);
-            }
-            for (const auto& ifv: hsetFV)
-            {
-                args.emplace_back(ifv);
-            }
-            transformAndPush(args);
-        }
-
-        if (hdelKeys.size() > 0)
-        {
-            vector<string> args;
-            args.emplace_back("EVALSHA");
-            args.emplace_back(m_shaHdel);
-            args.emplace_back(to_string(hdelKeys.size()));
-            for (const auto& ik: hdelKeys)
-            {
-                args.emplace_back(ik);
-            }
-            for (const auto& ifv: hdelFields)
-            {
-                args.emplace_back(ifv);
-            }
-            transformAndPush(args);
-        }
-
-        if (delKeys.size() > 0)
-        {
-            vector<string> args;
-            args.emplace_back("EVALSHA");
-            args.emplace_back(m_shaDel);
-            args.emplace_back(to_string(delKeys.size()));
-            for (const auto& ik: delKeys)
-            {
-                args.emplace_back(ik);
-            }
-            transformAndPush(args);
-        }
-
-        // Only try to flush with last command, eventually redis multi/exec transaction is needed
-        m_pipe->push(command, REDIS_REPLY_NIL);
+        args.emplace_back(i);
     }
-}
 
-void ProducerTable::transformAndPush(const vector<string> &args)
-{
+    for (const auto& i: hdelKF)
+    {
+        args.emplace_back(i);
+    }
+
+    for (const auto& i: DelK)
+    {
+        args.emplace_back(i);
+    }
+
     // Transform data structure
     vector<const char *> args1;
     transform(args.begin(), args.end(), back_inserter(args1), [](const string &s) { return s.c_str(); } );
@@ -199,7 +156,7 @@ void ProducerTable::transformAndPush(const vector<string> &args)
     // Invoke redis command
     RedisCommand cmd;
     cmd.formatArgv((int)args1.size(), &args1[0], NULL);
-    m_pipe->push(cmd, REDIS_REPLY_NIL, false);
+    m_pipe->push(cmd, REDIS_REPLY_NIL);
 }
 
 void ProducerTable::set(const string &key, const vector<FieldValueTuple> &values, const string &op, const string &prefix,
