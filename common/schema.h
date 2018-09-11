@@ -100,6 +100,7 @@ namespace swss {
 #define CFG_VLAN_INTF_TABLE_NAME          "VLAN_INTERFACE"
 
 #define CFG_LAG_TABLE_NAME         "PORTCHANNEL"
+#define CFG_LAG_MEMBER_TABLE_NAME  "PORTCHANNEL_MEMBER"
 #define CFG_VLAN_TABLE_NAME        "VLAN"
 #define CFG_VLAN_MEMBER_TABLE_NAME "VLAN_MEMBER"
 #define CFG_SWITCH_TABLE_NAME      "SWITCH"
@@ -158,6 +159,10 @@ namespace swss {
 
 #define IPV4_NAME "IPv4"
 #define IPV6_NAME "IPv6"
+
+#define FRONT_PANEL_PORT_PREFIX "Ethernet"
+#define PORTCHANNEL_PREFIX      "PortChannel"
+#define VLAN_PREFIX             "Vlan"
 
 #define SET_COMMAND "SET"
 #define DEL_COMMAND "DEL"
