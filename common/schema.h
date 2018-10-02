@@ -31,6 +31,9 @@ namespace swss {
 #define APP_SWITCH_TABLE_NAME           "SWITCH_TABLE"
 
 #define APP_COPP_TABLE_NAME             "COPP_TABLE"
+#define APP_VRF_TABLE_NAME              "VRF_TABLE"
+#define APP_VNET_TABLE_NAME             "VNET_TABLE"
+#define APP_VXLAN_VRF_TABLE_NAME        "VXLAN_TUNNEL_MAP"
 
 /***** TO BE REMOVED *****/
 
@@ -145,6 +148,8 @@ namespace swss {
 
 #define CFG_VXLAN_TUNNEL_TABLE_NAME                 "VXLAN_TUNNEL"
 #define CFG_VXLAN_TUNNEL_MAP_TABLE_NAME             "VXLAN_TUNNEL_MAP"
+#define CFG_VNET_TABLE_NAME                         "VNET"
+#define CFG_VRF_TABLE_NAME                          "VRF"
 
 /***** STATE DATABASE *****/
 
@@ -156,6 +161,7 @@ namespace swss {
 #define STATE_FDB_TABLE_NAME            "FDB_TABLE"
 #define STATE_WARM_RESTART_TABLE_NAME   "WARM_RESTART_TABLE"
 #define STATE_VRF_TABLE_NAME            "VRF_TABLE"
+#define STATE_MGMT_PORT_TABLE_NAME      "MGMT_PORT_TABLE"
 
 /***** MISC *****/
 
