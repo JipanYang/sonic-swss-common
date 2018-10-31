@@ -194,6 +194,32 @@ void WarmStart::setWarmStartState(const std::string &app_name, WarmStartState st
                     warmStartStateNameMap.at(state).c_str());
 }
 
+WarmStart::WarmStartState WarmStart::getWarmStartState(const std::string &app_name)
+{
+    auto& warmStart = getInstance();
+
+    std::string stateStr = "Unkown";
+    warmStart.m_stateWarmRestartTable->hget(app_name,
+                                            "state",
+                                            stateStr);
+
+    WarmStartState state = INITIALIZED;
+
+    for (auto it = warmStartStateNameMap.begin(); it != warmStartStateNameMap.end(); it++)
+    {
+        if (it->second == stateStr)
+        {
+            state = it->first;
+            break;
+        }
+    }
+
+    SWSS_LOG_NOTICE("Getting %s WarmStart state result: %s",
+                    app_name.c_str(), stateStr.c_str());
+
+    return state;
+}
+
 // Set the WarmStart data check state for a particular application.
 void WarmStart::setDataCheckState(const std::string &app_name, DataCheckStage stage, DataCheckState state)
 {
