@@ -795,3 +795,139 @@ TEST(ProducerConsumer, ConsumerSelectWithInitData)
 
     cout << endl << "Done." << endl;
 }
+
+/*
+ * Test auxiliary operations that come with producer set/del request.
+ *
+ * Redis guarantees that a script is executed in an atomic way:
+ * no other script or Redis command will be executed while a script is being executed.
+ * This semantic is similar to the one of MULTI / EXEC.
+ * From the point of view of all the other clients the effects of a script
+ * are either still not visible or already completed.
+ */
+TEST(ProducerConsumer, atomicAuxiliaryOp)
+{
+    std::string tableName = "tableName";
+
+    DBConnector db(TEST_DB, "localhost", 6379, 0);
+    ProducerTable p(&db, tableName);
+    RedisClient redic(&db);
+
+
+    cout << "- Step 1. First Producer set with auxiliary HSET/HMSET operations" << endl;
+    // Prepare the auxiliary operation KeyOpFieldsValuesTuple vector
+    std::vector<KeyOpFieldsValuesTuple> vkco;
+    std::vector<FieldValueTuple> fvs;
+    fvs.emplace_back("switch_oid", "oid:0x21000000000000");
+    vkco.emplace_back("RESTORE_SWITCH", "HSET", fvs);
+    fvs.clear();
+    fvs.emplace_back("SAI_LAG_MEMBER_ATTR_LAG_ID", "oid:0x20000000009c1");
+    fvs.emplace_back("SAI_LAG_MEMBER_ATTR_PORT_ID", "oid:0x1000000000004");
+    vkco.emplace_back("RESTORE_OID2ATTR_SAI_OBJECT_TYPE_LAG_MEMBER:oid:0x1b000000000a03", "HMSET", fvs);
+
+    std::vector<FieldValueTuple> values;
+
+    FieldValueTuple t("f", "v");
+    values.push_back(t);
+    p.set("key", values, "set", "prefix_", vkco);
+
+
+    // data in auxiliary op written to DB immediately.
+    cout << "- Step 2. Frist auxiliary data get from DB" << endl;
+    auto fvs_umap = redic.hgetall("RESTORE_SWITCH");
+    unsigned int size_v = 1;
+    EXPECT_EQ(fvs_umap.size(), size_v);
+    for (auto fv: fvs_umap)
+    {
+        EXPECT_EQ(fvField(fv), "switch_oid");
+        EXPECT_EQ(fvValue(fv), "oid:0x21000000000000");
+    }
+    fvs_umap = redic.hgetall("RESTORE_OID2ATTR_SAI_OBJECT_TYPE_LAG_MEMBER:oid:0x1b000000000a03");
+    size_v = 2;
+    EXPECT_EQ(fvs_umap.size(), size_v);
+    for (auto fv: fvs_umap)
+    {
+        //cout << " " << fvField(fv) << " : " << fvValue(fv) << flush;
+        if (fvField(fv) == "SAI_LAG_MEMBER_ATTR_LAG_ID")
+        {
+            EXPECT_EQ(fvValue(fv), "oid:0x20000000009c1");
+        }
+        if (fvField(fv) == "SAI_LAG_MEMBER_ATTR_PORT_ID")
+        {
+            EXPECT_EQ(fvValue(fv), "oid:0x1000000000004");
+        }
+    }
+    cout << endl;
+
+
+    cout << "- Step 3. Second Producer set with auxiliary HSET/HDEL/DEL operations" << endl;
+    fvs.clear();
+    vkco.clear();
+    vkco.emplace_back("RESTORE_SWITCH", "DEL", fvs);
+    //change SAI_LAG_MEMBER_ATTR_LAG_ID from From oid:0x20000000009c1 to oid:0xc0000000009c1
+    fvs.emplace_back("SAI_LAG_MEMBER_ATTR_LAG_ID", "oid:0xc0000000009c1");
+    vkco.emplace_back("RESTORE_OID2ATTR_SAI_OBJECT_TYPE_LAG_MEMBER:oid:0x1b000000000a03", "HSET", fvs);
+
+    fvs.clear();
+    fvs.emplace_back("SAI_LAG_MEMBER_ATTR_PORT_ID", "oid:0x1000000000004");
+    //Delete fv:  "SAI_LAG_MEMBER_ATTR_PORT_ID", "oid:0x1000000000004"
+    vkco.emplace_back("RESTORE_OID2ATTR_SAI_OBJECT_TYPE_LAG_MEMBER:oid:0x1b000000000a03", "HDEL", fvs);
+
+    FieldValueTuple t2("f2", "v2");
+    values.clear();
+    values.push_back(t2);
+    p.set("key", values, "set", "prefix_", vkco);
+
+
+    cout << "- Step 4. Consumer pop and check regular data" << endl;
+    ConsumerTable c(&db, tableName);
+    std::string key;
+    std::string op;
+
+    c.pop(key, op, fvs, "prefix_");
+
+    EXPECT_EQ(key, "key");
+    EXPECT_EQ(op, "set");
+    EXPECT_EQ(fvField(fvs[0]), "f");
+    EXPECT_EQ(fvValue(fvs[0]), "v");
+
+    c.pop(key, op, fvs, "prefix_");
+
+    EXPECT_EQ(key, "key");
+    EXPECT_EQ(op, "set");
+    EXPECT_EQ(fvField(fvs[0]), "f2");
+    EXPECT_EQ(fvValue(fvs[0]), "v2");
+
+
+    cout << "- Step 5. Second auxiliary data get from DB" << endl;
+    fvs_umap = redic.hgetall("RESTORE_SWITCH");
+    EXPECT_TRUE(fvs_umap.empty());
+
+    fvs_umap = redic.hgetall("RESTORE_OID2ATTR_SAI_OBJECT_TYPE_LAG_MEMBER:oid:0x1b000000000a03");
+    //Only field "SAI_LAG_MEMBER_ATTR_PORT_ID" left, and value changed to "oid:0xc0000000009c1"
+    EXPECT_EQ(fvs_umap.size(), 1);
+    for (auto fv: fvs_umap)
+    {
+        //cout << " " << fvField(fv) << " : " << fvValue(fv) << flush;
+        EXPECT_EQ(fvField(fv), "SAI_LAG_MEMBER_ATTR_LAG_ID");
+        EXPECT_EQ(fvValue(fv), "oid:0xc0000000009c1");
+    }
+    cout << endl;
+
+    cout << "- Step 6. Producer del with auxiliary DEL operations" << endl;
+
+    fvs.clear();
+    vkco.clear();
+    vkco.emplace_back("RESTORE_OID2ATTR_SAI_OBJECT_TYPE_LAG_MEMBER:oid:0x1b000000000a03", "DEL", fvs);
+    p.del("key", "del", "prefix_", vkco);
+
+
+    cout << "- Step 7.  Third auxiliary data get from DB, Consumer pop andcheck regular data and " << endl;
+    fvs_umap = redic.hgetall("RESTORE_OID2ATTR_SAI_OBJECT_TYPE_LAG_MEMBER:oid:0x1b000000000a03");
+    EXPECT_TRUE(fvs_umap.empty());
+
+    c.pop(key, op, fvs, "prefix_");
+    EXPECT_EQ(key, "key");
+    EXPECT_EQ(op, "del");
+    EXPECT_TRUE(fvs.empty());
+}
